@@ -148,7 +148,7 @@
                 </b-card-group>
                 <!-- Bot options modal -->
                 <div v-if="options_selected_bot">
-                    <b-modal id="bot_options_modal" title="Bot Options & Info" ok-only ok-variant="secondary" ok-title="Close">
+                    <b-modal id="bot_options_modal" title="Bot Options & Info" ok-only ok-variant="secondary" ok-title="Close" size="lg">
                         <p>
                             This bot has a User-Agent of <code>{{ options_selected_bot.user_agent }}</code> and was first seen {{ options_selected_bot.createdAt | moment("MMMM Do YYYY, h:mm:ss a") }}.
                         </p>
@@ -157,13 +157,32 @@
                         </p>
                         <hr />
                         <div class="input-group">
-                            <div class="input-group-prepend">
-                                <span class="input-group-text">Bot Name</span>
+                            <div class="input-group-prepend" style="min-width: 100px; width: 15%;">
+                                <span class="input-group-text w-100">Bot Name</span>
                             </div>
-                            <input type="text" class="form-control" placeholder="Please wait..." v-model="options_selected_bot.name" autofocus>
-                            <b-button variant="primary" v-on:click="update_bot_name">
-                                <font-awesome-icon :icon="['fas', 'edit']" class="icon alt mr-1 ml-1" /> Rename
-                            </b-button>
+                            <input type="text" class="form-control h-auto" placeholder="Please wait..." v-model="options_selected_bot.name" autofocus>
+                            <div class="input-group-append" style="min-width: 100px; width: 15%;">
+                                <b-button variant="primary" v-on:click="update_bot_name" class="w-100">
+                                    <font-awesome-icon :icon="['fas', 'edit']" class="icon alt mr-1 ml-1" /> Rename
+                                </b-button>
+                            </div>
+                        </div>
+                        <hr />
+                        <div class="input-group">
+                            <div class="input-group-prepend" style="min-width: 100px; width: 15%;">
+                                <span class="input-group-text w-100">Cookies</span>
+                            </div>
+                            <textarea rows="5" readonly class="form-control bg-white h-auto" placeholder="Please press get... (Only work when bot is online.)" v-model="cookies" style="resize: none; overflow-y: auto;"></textarea>
+                            <!-- <div class="input-group-append">
+                                <span class="input-group-text copy-element" v-bind:data-clipboard-text="cookies" v-on:click="copy_toast">
+                                    <font-awesome-icon :icon="['fas', 'clipboard']" class="icon alt mr-1 ml-1" />
+                                </span>
+                            </div -->
+                            <div class="input-group-append" style="min-width: 100px; width: 15%;">
+                                <b-button variant="primary" v-on:click="get_bot_cookies" class="w-100">
+                                    <font-awesome-icon :icon="['fas', 'cookie']" class="icon alt mr-1 ml-1" /> Get
+                                </b-button>
+                            </div>
                         </div>
                         <hr />
                         <div class="input-group">
@@ -226,6 +245,7 @@ export default {
             loading: false,
             bots: [],
             options_selected_bot: {},
+            cookies: null,
         }
     },
     computed: {
@@ -311,6 +331,25 @@ export default {
             );
             this.$toastr.s('Bot renamed succesfully.');
             this.refresh_bots();
+        },
+        async get_bot_cookies() {
+            try {
+                const response = await api_request(
+                    'POST',
+                    '/get-bot-browser-cookies', {
+                        username: this.options_selected_bot.proxy_username,
+                        password: this.options_selected_bot.proxy_password,
+                    }
+                );
+                if (response && Array.isArray(response.cookies)) {
+                    this.cookies = JSON.stringify(response.cookies, null, 4);
+                } else {
+                    this.cookies = 'Error: Cookies format is invalid.';
+                }
+            } catch (error) {
+                this.cookies = `Error: ${error.error || 'Unable to fetch cookies.'}`;
+                console.error(error);
+            }
         },
         bot_open_options(bot_id) {
             this.options_selected_bot = copy(this.get_selected_bot(bot_id));

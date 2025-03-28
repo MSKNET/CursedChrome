@@ -135,7 +135,7 @@ const websocket_check_interval = setInterval(() => {
     const seconds_since_last_live_message = current_timestamp - last_live_connection_timestamp;
 
     if (seconds_since_last_live_message > 29 || websocket.readyState === 3) {
-        console.error(`WebSocket does not appear to be live! Restarting the WebSocket connection...`);
+        console.log(`[error] WebSocket does not appear to be live! Restarting the WebSocket connection...`);
 
         try {
             websocket.close();
@@ -229,8 +229,8 @@ async function perform_http_request(params) {
             request_options
         );
     } catch (e) {
-        console.error(`Error occurred while performing fetch:`);
-        console.error(e);
+        console.log(`[error] Error occurred while performing fetch:`);
+        console.log(e);
         return;
     }
 
@@ -322,8 +322,8 @@ function initialize() {
                 event.data
             );
         } catch (e) {
-            console.error(`Could not parse WebSocket message!`);
-            console.error(e);
+            console.log(`[error] Could not parse WebSocket message!`);
+            console.log(e);
             return
         }
 
@@ -341,7 +341,7 @@ function initialize() {
                 })
             )
         } else {
-            console.error(`No RPC action ${parsed_message.action}!`);
+            console.log(`[error] No RPC action ${parsed_message.action}!`);
         }
     };
 

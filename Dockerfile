@@ -1,30 +1,25 @@
-FROM node:12.16.2-stretch
+FROM node:12-slim
 
-RUN mkdir /work/
 WORKDIR /work/
-COPY package.json /work/
-COPY package-lock.json /work/
-RUN npm install
+COPY package.json package-lock.json /work/
+RUN npm ci && npm cache clean --force
 
 COPY ./anyproxy /work/anyproxy/
-RUN /work/anyproxy/bin/anyproxy-ca --generate
-RUN mkdir /work/ssl/
-RUN cp /root/.anyproxy/certificates/rootCA.crt /work/ssl/
-RUN cp /root/.anyproxy/certificates/rootCA.key /work/ssl/
+
+# You don't want your trusted root CA key in a public docker image
+# They will be generated in docker-entrypoint.sh
+# RUN /work/anyproxy/bin/anyproxy-ca --generate \
+#     && mkdir /work/ssl/ \
+#     && cp /root/.anyproxy/certificates/rootCA.crt /work/ssl/ \
+#     && cp /root/.anyproxy/certificates/rootCA.key /work/ssl/
 
 # Copy over and build front-end
+COPY gui/package.json gui/package-lock.json /work/gui/
+RUN cd /work/gui && npm ci && npm cache clean --force
 COPY gui /work/gui
-WORKDIR /work/gui
-RUN npm install
-RUN npm run build
+RUN cd /work/gui && npm run build && npm cache clean --force
 
-WORKDIR /work/
-
-COPY utils.js /work/
-COPY api-server.js /work/
-COPY server.js /work/
-COPY database.js /work/
-COPY docker-entrypoint.sh /work/
+COPY utils.js api-server.js server.js database.js docker-entrypoint.sh /work/
 
 # For debugging/hot-reloading
 #RUN npm install -g nodemon

